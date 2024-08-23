@@ -1,107 +1,91 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
-from sklearn.preprocessing import LabelEncoder
-from sklearn.impute import SimpleImputer
 
-# Load the pre-trained model
-model = joblib.load('titanic_model.pkl')
+# Load the model
+model = joblib.load('model.pkl')
 
+# Function to preprocess the data
 def preprocess_data(df):
-    # Handle missing values for Age and Fare
-    imputer = SimpleImputer(strategy='median')
-    if 'Age' in df.columns:
-        df['Age'] = imputer.fit_transform(df[['Age']])
-    if 'Fare' in df.columns:
-        df['Fare'] = imputer.fit_transform(df[['Fare']])
-    
-    # Handle missing values for Embarked, if the column exists
+    # Handle missing values
+    df['Age'].fillna(df['Age'].median(), inplace=True)
+    df['Fare'].fillna(df['Fare'].median(), inplace=True)
     if 'Embarked' in df.columns:
         df['Embarked'].fillna(df['Embarked'].mode()[0], inplace=True)
     
     # Convert categorical variables to numerical
     if 'Sex' in df.columns:
-        df['Sex'] = LabelEncoder().fit_transform(df['Sex'])
-    
-    # One-hot encode Embarked, if the column exists
+        df['Sex'] = df['Sex'].map({'male': 0, 'female': 1})
     if 'Embarked' in df.columns:
         df = pd.get_dummies(df, columns=['Embarked'], drop_first=True)
     
-    # Ensure the dataframe has the correct structure
-    expected_columns = ['Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare', 'Embarked_Q', 'Embarked_S']
-    for col in expected_columns:
-        if col not in df.columns:
-            df[col] = 0  # Add missing columns with default value 0
-    
-    # Drop columns that won't be used in the model, if they exist
+    # Drop columns that won't be used in the model
     df.drop(['Name', 'Ticket', 'Cabin'], axis=1, inplace=True, errors='ignore')
     
     return df
 
+# Function to make predictions
+def make_prediction(input_data):
+    input_data = preprocess_data(input_data)
+    predictions = model.predict(input_data)
+    return predictions
+
+# Streamlit app layout
 def main():
     st.title("Titanic Survival Prediction")
 
     # Option to upload a CSV file
-    st.subheader("Upload CSV File")
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+    uploaded_file = st.file_uploader("Upload a CSV file for batch prediction", type=["csv"])
+    
+    if uploaded_file:
+        # Handle the uploaded file
+        input_df = pd.read_csv(uploaded_file)
+        st.write("Input Data:")
+        st.write(input_df)
 
-    if uploaded_file is not None:
-        test_df = pd.read_csv(uploaded_file)
-        test_df = preprocess_data(test_df)
+        predictions = make_prediction(input_df)
+        output_df = input_df.copy()
+        output_df['Survived'] = predictions
+        st.write("Predictions:")
+        st.write(output_df)
         
-        # Prepare the test data
-        X_test = test_df.drop(['PassengerId'], axis=1)
-        
-        # Predict using the trained model
-        predictions = model.predict(X_test)
-        
-        # Create a DataFrame with the results
-        output = pd.DataFrame({'PassengerId': test_df['PassengerId'], 'Survived': predictions})
-        
-        # Display results
-        st.write("Prediction Results:")
-        st.write(output)
-        
-        # Allow user to download the results
+        # Option to download the prediction results
+        csv = output_df.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="Download Predictions",
-            data=output.to_csv(index=False),
-            file_name='submission.csv',
-            mime='text/csv'
+            label="Download predictions as CSV",
+            data=csv,
+            file_name='titanic_predictions.csv',
+            mime='text/csv',
         )
+    else:
+        # If no file is uploaded, ask for user input for a single prediction
+        st.write("Provide details for a single passenger:")
 
-    # Option to input individual features
-    st.subheader("Input Individual Passenger Data")
+        Pclass = st.selectbox("Pclass", [1, 2, 3], index=0)
+        Sex = st.selectbox("Sex", ["male", "female"])
+        Age = st.slider("Age", 0, 100, 30)
+        SibSp = st.number_input("SibSp", min_value=0, max_value=10, value=0)
+        Parch = st.number_input("Parch", min_value=0, max_value=10, value=0)
+        Fare = st.number_input("Fare", min_value=0.0, max_value=1000.0, value=30.0)
+        Embarked = st.selectbox("Embarked", ["C", "Q", "S"])
 
-    # Create input fields
-    pclass = st.selectbox("Pclass", [1, 2, 3])
-    sex = st.selectbox("Sex", ["male", "female"])
-    age = st.number_input("Age", min_value=0, max_value=120, value=30)
-    sibsp = st.number_input("SibSp (Number of Siblings/Spouses Aboard)", min_value=0, max_value=10, value=0)
-    parch = st.number_input("Parch (Number of Parents/Children Aboard)", min_value=0, max_value=10, value=0)
-    fare = st.number_input("Fare", min_value=0.0, value=10.0)
-    embarked = st.selectbox("Embarked", ["C", "Q", "S"])
-    
-    # Convert categorical input to match preprocessing
-    sex_encoded = LabelEncoder().fit(["male", "female"]).transform([sex])[0]
-    embarked_encoded = pd.get_dummies([embarked], columns=["Embarked"], drop_first=True).reindex(columns=["Embarked_Q", "Embarked_S"], fill_value=0).values[0]
-    
-    if st.button("Predict"):
-        # Prepare the input data for prediction
-        input_df = pd.DataFrame({
-            'Pclass': [pclass],
-            'Sex': [sex_encoded],
-            'Age': [age],
-            'SibSp': [sibsp],
-            'Parch': [parch],
-            'Fare': [fare],
-            'Embarked_Q': [embarked_encoded[0]],
-            'Embarked_S': [embarked_encoded[1]]
+        # Convert input to DataFrame
+        input_data = pd.DataFrame({
+            'Pclass': [Pclass],
+            'Sex': [Sex],
+            'Age': [Age],
+            'SibSp': [SibSp],
+            'Parch': [Parch],
+            'Fare': [Fare],
+            'Embarked': [Embarked]
         })
-        
-        # Predict using the trained model
-        prediction = model.predict(input_df)[0]
-        
+
+        st.write("Input Data:")
+        st.write(input_data)
+
+        # Predict
+        prediction = make_prediction(input_data)[0]
         st.write(f"Survived: {'Yes' if prediction == 1 else 'No'}")
 
 if __name__ == "__main__":
