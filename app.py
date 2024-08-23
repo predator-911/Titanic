@@ -4,7 +4,7 @@ import numpy as np
 import joblib
 
 # Load the model
-model = joblib.load('model.pkl')
+model = joblib.load('titanic_model.pkl')
 
 # Function to preprocess the data
 def preprocess_data(df):
