@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
 
 # Load the model
@@ -26,7 +25,7 @@ def preprocess_data(df):
             df[col] = 0
     
     # Drop columns that won't be used in the model
-    df.drop(['Name', 'Ticket', 'Cabin'], axis=1, inplace=True, errors='ignore')
+    df.drop(['Name', 'Ticket', 'Cabin', 'PassengerId'], axis=1, inplace=True, errors='ignore')
     
     return df
 
