@@ -20,6 +20,11 @@ def preprocess_data(df):
     if 'Embarked' in df.columns:
         df = pd.get_dummies(df, columns=['Embarked'], drop_first=True)
     
+    # Ensure the dummy columns are always present
+    for col in ['Embarked_Q', 'Embarked_S']:
+        if col not in df.columns:
+            df[col] = 0
+    
     # Drop columns that won't be used in the model
     df.drop(['Name', 'Ticket', 'Cabin'], axis=1, inplace=True, errors='ignore')
     
@@ -84,8 +89,9 @@ def main():
         st.write("Input Data:")
         st.write(input_data)
 
-        # Predict
-        prediction = make_prediction(input_data)[0]
+        # Preprocess and predict
+        input_data = preprocess_data(input_data)
+        prediction = model.predict(input_data)[0]
         st.write(f"Survived: {'Yes' if prediction == 1 else 'No'}")
 
 if __name__ == "__main__":
